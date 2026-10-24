@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Plan de planta</title>
+<meta name="description" content="Avance en vivo de la implementación en planta Provagro: etapas plegables, dispositivos, compuertas y bitácora. Pensado para teléfono y tablet.">
+<style>
+:root{--bg:#13212b;--bg2:#0f1a22;--card:#182a36;--line:#2c4555;--tx:#e4eef2;--mut:#86a1ae;--ok:#45c486;--cur:#7fd0ff;--fail:#f05a5a;--blk:#f0b43c;--omi:#5f7684}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.4 -apple-system,"Segoe UI",system-ui,sans-serif;padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+/* cabecera fija: una sola línea + barra fina */
+header{position:sticky;top:0;z-index:2;background:var(--bg2);border-bottom:1px solid var(--line);padding:calc(8px + env(safe-area-inset-top)) 14px 8px}
+.h1{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+h1{margin:0;font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta{color:var(--mut);font-size:13px;white-space:nowrap}
+.bar{height:5px;background:#0b141b;border-radius:3px;margin-top:7px;overflow:hidden;display:flex}
+.bar i{display:block;height:100%}
+main{padding:10px 12px;max-width:1100px;margin:0 auto}
+/* «ahora» compacto */
+.ahora{padding:9px 12px;border-radius:9px;background:#10303f;border:1px solid #1f5b77;color:var(--cur);font-size:14px;margin-bottom:10px}
+.ahora b{color:var(--tx)}
+.ahora .et{color:var(--mut);font-size:12px;margin-left:6px}
+.ahora .nt{display:block;color:#c5d6de;font-size:12px;margin:1px 0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* avance por etapa: una pastilla por etapa con su % (el fondo se llena con el avance) */
+.prog{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.prog span{font-size:12px;padding:4px 9px;border-radius:999px;border:1px solid var(--line);color:var(--tx);white-space:nowrap;background:linear-gradient(90deg,#1d5a44 var(--p),#182a36 var(--p))}
+.prog span b{font-weight:600;margin-right:5px}
+.prog span.viva{border-color:#1f5b77;box-shadow:0 0 0 2px #10303f}
+.prog span.done{color:var(--ok)}
+/* secciones plegables */
+details{background:var(--card);border:1px solid var(--line);border-radius:10px;margin:8px 0;overflow:hidden}
+summary{list-style:none;cursor:pointer;padding:12px 14px;display:flex;align-items:center;gap:10px;font-size:15px;font-weight:600;user-select:none;-webkit-tap-highlight-color:transparent}
+summary::-webkit-details-marker{display:none}
+summary .fl{margin-left:auto;display:flex;align-items:center;gap:8px;color:var(--mut);font-weight:400;font-size:13px;white-space:nowrap}
+summary .ch{width:18px;height:18px;flex:none;transition:transform .15s;color:var(--mut)}
+details[open]>summary .ch{transform:rotate(90deg)}
+details[open]>summary{border-bottom:1px solid var(--line)}
+.dot{width:10px;height:10px;border-radius:50%;flex:none;background:#243a48}
+.dot.ok{background:var(--ok)}.dot.en_curso{background:var(--cur);box-shadow:0 0 0 3px #10303f}.dot.falla,.dot.bloqueado{background:var(--fail)}.dot.esperando{background:var(--blk)}.dot.fuera{background:var(--omi)}
+.mini{display:flex;gap:3px}
+.mini i{display:block;width:8px;height:8px;border-radius:2px;background:#243a48}
+.mini i.ok{background:var(--ok)}.mini i.en_curso{background:var(--cur)}.mini i.falla{background:var(--fail)}.mini i.bloqueado{background:var(--blk)}.mini i.omitido{background:var(--omi)}
+/* tareas */
+.t{display:grid;grid-template-columns:40px 1fr;gap:8px 10px;padding:11px 14px;border-top:1px solid #1f3442;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.t:first-of-type{border-top:0}
+.t:active{background:#1d3240}
+.t .id{color:var(--mut);font-variant-numeric:tabular-nums;font-size:14px;padding-top:1px}
+.t .tit{font-size:15px}
+.t .det{color:var(--mut);font-size:13px;margin-top:3px}
+.t .nota{margin-top:5px;font-size:13px;color:#c5d6de;background:#0f1a22;padding:5px 8px;border-radius:6px;border-left:3px solid var(--line)}
+.chip{display:inline-block;font-size:12px;padding:2px 9px;border-radius:999px;border:1px solid var(--line);color:var(--mut);margin-top:5px}
+.en_curso{background:#10303f;border-color:#1f5b77;color:var(--cur)}
+.ok{background:#12312a;border-color:#1d5a44;color:var(--ok)}
+.falla{background:#3a1a1a;border-color:#7a2f2f;color:var(--fail)}
+.bloqueado{background:#3a2d12;border-color:#7a5e22;color:var(--blk)}
+.omitido{color:var(--omi);text-decoration:line-through}
+.t.gate{background:#0f1a22}.t.gate .tit{font-weight:600}
+.t.cur{outline:2px solid #1f5b77;outline-offset:-2px}
+.t.d-ok .tit{color:#9fc7b3}.t.d-ok .id{color:var(--ok)}
+/* dispositivos */
+.d{padding:10px 14px;border-top:1px solid #1f3442;font-size:14px}
+.d:first-of-type{border-top:0}
+.d .n{font-weight:600;display:flex;justify-content:space-between;gap:8px}
+.d .n time{font-weight:400;color:var(--mut);font-variant-numeric:tabular-nums;font-size:13px;white-space:nowrap}
+.d .ta{color:#c5d6de;margin-top:3px}
+.d .no{color:var(--mut);font-size:13px;margin-top:2px}
+.d.viejo time{color:var(--blk)}.d.muerto time{color:var(--fail)}.d.bloq{background:#2a1717}
+/* bitácora */
+.bit{list-style:none;margin:0;padding:0}
+.bit li{display:grid;grid-template-columns:48px 1fr;gap:6px 10px;padding:8px 14px;border-top:1px solid #1f3442;font-size:13px}
+.bit li:first-of-type{border-top:0}
+.bit time{color:var(--mut);font-variant-numeric:tabular-nums}
+.bit .k{color:var(--cur);margin-right:6px}
+.vacio{color:var(--mut);padding:12px 14px;font-size:14px}
+/* botón flotante para anotar */
+.fab{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:3;background:#1f5b77;color:#fff;border:0;border-radius:999px;padding:14px 18px;font:15px -apple-system,"Segoe UI",system-ui;box-shadow:0 6px 18px rgba(0,0,0,.4)}
+button{font:15px -apple-system,"Segoe UI",system-ui;padding:12px 14px;border-radius:9px;border:1px solid var(--line);background:#1d3240;color:var(--tx);cursor:pointer}
+button.p{background:#1f5b77;border-color:#1f5b77}
+/* hojas (edición de tarea / nota) */
+.velo{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:4;display:none;align-items:flex-end}
+.velo.on{display:flex}
+.hoja{width:100%;max-width:1100px;margin:0 auto;background:var(--card);border-top:1px solid var(--line);border-radius:14px 14px 0 0;padding:14px 14px calc(14px + env(safe-area-inset-bottom));max-height:85vh;overflow:auto}
+.hoja h3{margin:0 0 4px;font-size:16px}
+.hoja .det{color:var(--mut);font-size:13px;margin-bottom:12px}
+.estados{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.estados button{padding:13px 6px;font-size:14px}
+.estados button.sel{outline:2px solid var(--tx)}
+.hoja textarea{width:100%;min-height:76px;font:16px -apple-system,"Segoe UI",system-ui;padding:10px;border-radius:9px;border:1px solid var(--line);background:#0b141b;color:var(--tx);resize:vertical}
+.acc{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
+.err{color:var(--fail);font-size:13px;min-height:18px;margin-top:6px}
+footer{color:var(--mut);font-size:12px;text-align:center;padding:14px}
+</style>
+</head>
+<body>
+<header>
+  <div class="h1"><h1 id="h1">Plan de planta · 23-oct</h1><div class="meta" id="meta">cargando…</div></div>
+  <div class="bar" id="bar"></div>
+</header>
+<main>
+  <div class="prog" id="prog"></div>
+  <div class="ahora" id="ahora">—</div>
+  <div id="cuerpo"></div>
+  <footer>Se actualiza solo cada 8 s · toca una tarea para marcarla · toca un título para plegar</footer>
+</main>
+<button class="fab" id="fab" type="button">Anotar</button>
+<div class="velo" id="velo"><div class="hoja">
+  <h3 id="hTit"></h3><div class="det" id="hDet"></div>
+  <div class="estados" id="hEst"></div>
+  <textarea id="hNota" placeholder="Nota (qué se vio, medida, hora, quién confirma)…"></textarea>
+  <div class="err" id="hErr"></div>
+  <div class="acc"><button type="button" id="hCancel">Cancelar</button><button type="button" class="p" id="hSave">Guardar</button></div>
+</div></div>
+<div class="velo" id="veloN"><div class="hoja">
+  <h3>Anotar en la bitácora</h3><div class="det">Hora automática. Útil para medidas, confirmaciones y lo que se ve en terreno.</div>
+  <textarea id="nTxt" placeholder="Ej.: 20:35 caja de 500 tarda 2,1 s en salir de I0.3 tras despejarse la .23.20"></textarea>
+  <div class="err" id="nErr"></div>
+  <div class="acc"><button type="button" id="nCancel">Cancelar</button><button type="button" class="p" id="nSave">Anotar</button></div>
+</div></div>
+<script>
+const URL_='https://rfnedcsjbmktoducwenr.supabase.co/rest/v1/',KEY='sb_publishable_SQ2annv6mRBuhKtqEkgYyw_mSZ4YJdP';
+const H={apikey:KEY,Authorization:'Bearer '+KEY,'Content-Type':'application/json'};
+const ET={pendiente:'pendiente',en_curso:'en curso',ok:'listo',falla:'falló',bloqueado:'bloqueado',omitido:'omitido'};
+const EA={activo:'activo',esperando:'esperando',bloqueado:'BLOQUEADO',fuera:'fuera'};
+const COL={ok:'var(--ok)',en_curso:'var(--cur)',falla:'var(--fail)',bloqueado:'var(--blk)',omitido:'var(--omi)',pendiente:'#243a48'};
+const CHEV='<svg class="ch" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4l6 6-6 6"/></svg>';
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const hora=t=>new Date(t).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});
+const hace=t=>{const m=(Date.now()-new Date(t))/60000;return m<1?'ahora':m<60?`hace ${Math.round(m)} min`:`hace ${(m/60).toFixed(1)} h`;};
+let ult=0,P=[],sel=null,selEst=null,ABIERTO={};
+// eslint: falla/resumenMeta se declaran junto a tick()
+try{ABIERTO=JSON.parse(localStorage.getItem('plan_abierto')||'{}')}catch(e){}
+function guardaAbierto(){try{localStorage.setItem('plan_abierto',JSON.stringify(ABIERTO))}catch(e){}}
+function clave(){let k='';try{k=localStorage.getItem('plan_clave')||''}catch(e){} if(!k){k=window.prompt('Clave del tablero (una sola vez en este equipo):')||'';if(k)try{localStorage.setItem('plan_clave',k)}catch(e){}} return k;}
+async function rpc(fn,cuerpo){const r=await fetch(URL_+'rpc/'+fn,{method:'POST',headers:H,body:JSON.stringify(cuerpo)});if(!r.ok){const t=await r.text();if(t.includes('clave'))try{localStorage.removeItem('plan_clave')}catch(e){};throw new Error(t.includes('clave')?'clave incorrecta':t.slice(0,120));}}
+
+async function carga(){
+  try{
+    const o={headers:H,cache:'no-store'};          // Safari/iOS: nada de caché (PostgREST no admite parámetros extra en la URL)
+    const [p,b,ag]=await Promise.all([
+      fetch(URL_+'provagro_plan?select=*&order=orden',o).then(r=>r.json()),
+      fetch(URL_+'provagro_plan_bitacora?select=*&order=t.desc&limit=40',o).then(r=>r.json()),
+      fetch(URL_+'provagro_plan_agentes?select=*&order=id',o).then(r=>r.json()).catch(()=>[])]);
+    if(!Array.isArray(p)) throw new Error(JSON.stringify(p));
+    P=p; pinta(p,Array.isArray(b)?b:[],Array.isArray(ag)?ag:[]); ult=Date.now(); falla=false;
+  }catch(e){falla=true;}
+  tick();
+}
+let falla=false, resumenMeta='';
+function tick(){const s=ult?Math.round((Date.now()-ult)/1000):null;
+  document.getElementById('meta').textContent=(falla?'sin conexión · ':'')+resumenMeta+(s==null?'':` · ↻ ${s}s`);}
+setInterval(tick,1000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)carga();});
+function det(id,abiertoPorDefecto,titulo,extra,cuerpo){
+  const open=(id in ABIERTO)?ABIERTO[id]:abiertoPorDefecto;
+  return `<details data-id="${esc(id)}" ${open?'open':''}><summary>${CHEV}<span>${titulo}</span><span class="fl">${extra}</span></summary>${cuerpo}</details>`;
+}
+function pinta(p,b,ag){
+  // cabecera
+  // avance = listas / (tareas sin compuertas ni omitidas); las omitidas no cuentan en contra
+  const tareas=p.filter(t=>!t.gate&&t.estado!=='omitido'), n=tareas.length, ok=tareas.filter(t=>t.estado==='ok').length;
+  const pctG=n?Math.round(100*ok/n):0;
+  const cnt={};p.forEach(t=>cnt[t.estado]=(cnt[t.estado]||0)+1);
+  document.getElementById('bar').innerHTML=['ok','en_curso','falla','bloqueado','omitido','pendiente'].map(k=>`<i style="width:${100*(cnt[k]||0)/p.length}%;background:${COL[k]}"></i>`).join('');
+  const act=[...p.map(t=>t.actualizado),...ag.map(a=>a.actualizado),...b.map(x=>x.t)].reduce((m,t)=>t>m?t:m,'');
+  resumenMeta=`${pctG} % · ${ok}/${n} · novedad ${act?hora(act):'—'}`;
+  // avance por etapa (pastillas): % de listas sobre tareas sin compuertas ni omitidas
+  const etapasP=[];p.forEach(t=>{let e=etapasP.find(x=>x.n===t.etapa);if(!e){e={n:t.etapa,ts:[]};etapasP.push(e);}e.ts.push(t);});
+  const nombreCorto=s=>s.replace(/^Etapa\s+/,'').replace(/\s*·\s*/,' · ').split(' · ')[0];
+  document.getElementById('prog').innerHTML=etapasP.map(e=>{const tt=e.ts.filter(t=>!t.gate&&t.estado!=='omitido'),k=tt.filter(t=>t.estado==='ok').length,pc=tt.length?Math.round(100*k/tt.length):0;
+    const viva=e.ts.some(t=>t.estado==='en_curso'||t.estado==='falla'||t.estado==='bloqueado');
+    return `<span class="${pc===100?'done':''} ${viva?'viva':''}" style="--p:${pc}%"><b>${esc(nombreCorto(e.n))}</b>${pc} %</span>`;}).join('');
+  // ahora: tareas en curso con su etapa y la última nota
+  const cur=p.filter(t=>t.estado==='en_curso'), bloq=p.filter(t=>t.estado==='falla'||t.estado==='bloqueado');
+  const linea=t=>`<b>${esc(t.id)} · ${esc(t.titulo)}</b><span class="et">${esc(nombreCorto(t.etapa))}</span>${t.nota?`<span class="nt">${esc(t.nota)}</span>`:''}`;
+  document.getElementById('ahora').innerHTML=cur.length?`En curso (${cur.length}):<br>${cur.map(linea).join('')}`:
+    bloq.length?`Detenido en ${linea(bloq[0])}`:'Sin tarea en curso';
+  let h='';
+  // dispositivos (plegado por defecto; resumen con puntos)
+  if(ag.length){
+    const resumen=ag.map(a=>{const m=(Date.now()-new Date(a.actualizado))/60000;const k=a.estado==='bloqueado'?'bloqueado':a.estado==='fuera'?'fuera':m>15?'falla':m>5?'esperando':a.estado==='esperando'?'esperando':'ok';return `<span class="dot ${k}" title="${esc(a.nombre)}"></span>`;}).join('');
+    const nb=ag.filter(a=>a.estado==='bloqueado').length;
+    const cuerpo=ag.map(a=>{const m=(Date.now()-new Date(a.actualizado))/60000;const cl=a.estado==='bloqueado'?'bloq':a.estado==='fuera'?'':m>15?'muerto':m>5?'viejo':'';
+      return `<div class="d ${cl}"><div class="n"><span>${esc(a.nombre)}</span><time>${esc(EA[a.estado]||a.estado)} · ${hace(a.actualizado)}</time></div><div class="ta">${esc(a.tarea)||'—'}</div>${a.nota?`<div class="no">${esc(a.nota)}</div>`:''}</div>`;}).join('');
+    h+=det('disp',false,'Dispositivos',`<span class="mini">${resumen}</span>${nb?`<span style="color:var(--fail)">${nb} bloq.</span>`:''}`,cuerpo);
+  }
+  // etapas: abierta solo la que tiene tarea en curso (o falla/bloqueo)
+  const etapas=[];p.forEach(t=>{let e=etapas.find(x=>x.n===t.etapa);if(!e){e={n:t.etapa,ts:[]};etapas.push(e);}e.ts.push(t);});
+  for(const e of etapas){
+    const tt=e.ts.filter(t=>!t.gate), tv=tt.filter(t=>t.estado!=='omitido'), k=tv.filter(t=>t.estado==='ok').length, pc=tv.length?Math.round(100*k/tv.length):0;
+    const viva=e.ts.some(t=>t.estado==='en_curso'||t.estado==='falla'||t.estado==='bloqueado');
+    const nombre=e.n.replace(/^Etapa\s+/,'').replace(/\s*·\s*/,' · ');
+    const corto=nombre.split(' · ')[0], resto=nombre.split(' · ').slice(1).join(' · ');
+    const mini=`<span class="mini">${tt.map(t=>`<i class="${t.estado}"></i>`).join('')}</span>`;
+    // dentro de la etapa, primero lo que está en curso, falla o bloqueado; el resto en su orden
+    const orden=t=>t.estado==='en_curso'||t.estado==='falla'||t.estado==='bloqueado'?0:1;
+    const cuerpo=[...e.ts].sort((a,b2)=>orden(a)-orden(b2)).map(t=>`<div class="t ${t.gate?'gate':''} ${t.estado==='en_curso'?'cur':''} d-${t.estado}" data-id="${esc(t.id)}"><div class="id">${esc(t.id)}</div><div><div class="tit">${esc(t.titulo)}</div>${t.detalle?`<div class="det">${esc(t.detalle)}</div>`:''}${t.nota?`<div class="nota">${esc(t.nota)}</div>`:''}<span class="chip ${t.estado}">${ET[t.estado]||t.estado}</span></div></div>`).join('');
+    h+=det('e:'+e.n,viva,`${esc(corto)} <span style="color:var(--mut);font-weight:400">${esc(resto)}</span>`,`${mini}<span>${pc} % · ${k}/${tv.length}</span>`,cuerpo);
+  }
+  // bitácora (plegada)
+  h+=det('bit',false,'Bitácora',`<span>${b.length?hora(b[0].t):'—'}</span>`,b.length?`<ul class="bit">${b.map(x=>`<li><time>${hora(x.t)}</time><span>${x.tarea?`<span class="k">${esc(x.tarea)}</span>`:''}${esc(x.txt)}</span></li>`).join('')}</ul>`:'<div class="vacio">Sin anotaciones todavía.</div>');
+  document.getElementById('cuerpo').innerHTML=h;
+  document.querySelectorAll('.t[data-id]').forEach(el=>el.onclick=()=>abre(el.dataset.id));
+  document.querySelectorAll('details[data-id]').forEach(d=>d.addEventListener('toggle',()=>{ABIERTO[d.dataset.id]=d.open;guardaAbierto();}));
+}
+function abre(id){
+  sel=P.find(t=>t.id===id); if(!sel) return; selEst=sel.estado;
+  document.getElementById('hTit').textContent=sel.id+' · '+sel.titulo; document.getElementById('hDet').textContent=sel.detalle||'';
+  document.getElementById('hNota').value=sel.nota||''; document.getElementById('hErr').textContent='';
+  document.getElementById('hEst').innerHTML=Object.keys(ET).map(k=>`<button type="button" class="${k} ${k===selEst?'sel':''}" data-k="${k}">${ET[k]}</button>`).join('');
+  document.querySelectorAll('#hEst button').forEach(b=>b.onclick=()=>{selEst=b.dataset.k;document.querySelectorAll('#hEst button').forEach(x=>x.classList.toggle('sel',x===b));});
+  document.getElementById('velo').classList.add('on');
+}
+const cierra=id=>document.getElementById(id).classList.remove('on');
+document.getElementById('hCancel').onclick=()=>cierra('velo');
+document.getElementById('velo').onclick=e=>{if(e.target.id==='velo')cierra('velo');};
+document.getElementById('hSave').onclick=async()=>{
+  const k=clave(); if(!k) return; const err=document.getElementById('hErr'); err.textContent='guardando…';
+  try{await rpc('plan_set',{p_clave:k,p_id:sel.id,p_estado:selEst,p_nota:document.getElementById('hNota').value.trim()});cierra('velo');carga();}
+  catch(e){err.textContent=e.message;}
+};
+document.getElementById('fab').onclick=()=>{document.getElementById('nErr').textContent='';document.getElementById('veloN').classList.add('on');setTimeout(()=>document.getElementById('nTxt').focus(),50);};
+document.getElementById('nCancel').onclick=()=>cierra('veloN');
+document.getElementById('veloN').onclick=e=>{if(e.target.id==='veloN')cierra('veloN');};
+document.getElementById('nSave').onclick=async()=>{
+  const i=document.getElementById('nTxt'); const txt=i.value.trim(); if(!txt) return; const k=clave(); if(!k) return;
+  try{await rpc('plan_nota',{p_clave:k,p_txt:txt,p_tarea:null}); i.value=''; cierra('veloN'); ABIERTO['bit']=true; guardaAbierto(); carga();}catch(e){document.getElementById('nErr').textContent=e.message;}
+};
+// la tablet/teléfono da señal sola cada 60 s mientras el tablero esté abierto (solo si ya se ingresó la clave)
+async function latido(){let k='';try{k=localStorage.getItem('plan_clave')||''}catch(e){} if(!k) return;
+  const disp=/iPhone|iPad|Android/i.test(navigator.userAgent)?'teléfono/tablet':'navegador';
+  try{await rpc('plan_agente',{p_clave:k,p_id:'tablet',p_nombre:'Sergio · '+disp,p_estado:'activo',p_tarea:'tablero abierto'});}catch(e){}}
+setInterval(latido,60000); setTimeout(latido,3000);
+carga();setInterval(carga,8000);
+</script>
+</body>
+</html>
