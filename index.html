@@ -46,6 +46,11 @@ button:disabled{opacity:.4}
 <main>
   <div class="aviso">Cada «Aplicar» escribe la velocidad en la tarjeta (en RAM, efecto inmediato). «Guardar» la graba en la memoria de la tarjeta para que sobreviva al corte. Límite 30–80 %. Lo que ves es lo que el PC leyó de la tarjeta, no lo que pediste.</div>
   <div id="cuerpo"></div>
+  <details open><summary><span>Diagnóstico de motores</span><small>a demanda, no continuo</small></summary>
+    <div class="aviso">Mide una pierna durante los minutos indicados mientras pasan cajas (sueltas, derechas): tiempo de sensor por zona, consumo del motor y tensión. Marca zonas sin tracción, lentas, con consumo alto o tensión baja. Caja de referencia 300 mm.</div>
+    <div class="t" style="grid-template-columns:1fr auto"><div class="vel"><button data-dg="192.168.21.0">Pierna 1001</button><button data-dg="192.168.22.0">Pierna 2001</button><button data-dg="192.168.23.0">Sellado</button></div><div class="vel"><span class="est">min</span><button data-dm="-1">−</button><b id="dgMin">3</b><button data-dm="1">+</button></div></div>
+    <ul class="bit" id="diag"></ul>
+  </details>
   <details id="dOrd"><summary><span>Órdenes</span><small id="nOrd"></small></summary><ul class="bit" id="ord"></ul></details>
 </main>
 <script>
@@ -59,8 +64,8 @@ async function rpc(fn,c){const r=await fetch(URL_+'rpc/'+fn,{method:'POST',heade
 async function carga(){
   try{
     const o={headers:H,cache:'no-store'};
-    const [e,p,ord]=await Promise.all([fetch(URL_+'provagro_mant_estado?select=*&order=ip',o).then(r=>r.json()),fetch(URL_+'provagro_mant_puente?select=*',o).then(r=>r.json()),fetch(URL_+'provagro_mant_ordenes?select=*&order=t.desc&limit=30',o).then(r=>r.json())]);
-    E=e; pinta(e,p[0],ord);
+    const [e,p,ord,dg]=await Promise.all([fetch(URL_+'provagro_mant_estado?select=*&order=ip',o).then(r=>r.json()),fetch(URL_+'provagro_mant_puente?select=*',o).then(r=>r.json()),fetch(URL_+'provagro_mant_ordenes?select=*&order=t.desc&limit=30',o).then(r=>r.json()),fetch(URL_+'provagro_mant_diagnosticos?select=*&order=t.desc&limit=5',o).then(r=>r.json()).catch(()=>[])]);
+    E=e; pinta(e,p[0],ord); pintaDiag(Array.isArray(dg)?dg:[]);
   }catch(err){document.getElementById('meta').textContent='sin conexión';}
 }
 function pinta(e,p,ord){
@@ -88,6 +93,15 @@ function pinta(e,p,ord){
   document.getElementById('nOrd').textContent=ord.length?hora(ord[0].t):'—';
   document.getElementById('ord').innerHTML=ord.map(o=>`<li><time>${hora(o.t)}</time><span>.${esc(o.ip.split('.').pop())} ${esc(o.accion)} ${o.valor!=null?(o.valor/10)+' %':''} → <span class="${o.estado}">${esc(o.estado)}</span>${o.resultado?' <small>'+esc(JSON.stringify(o.resultado)).slice(0,120)+'</small>':''}</span></li>`).join('');
 }
+let dgMin=3;
+function pintaDiag(dg){
+  document.getElementById('dgMin').textContent=dgMin;
+  document.getElementById('diag').innerHTML=dg.length?dg.map(d=>{const an=(d.anomalias||[]); const zs=(d.zonas||[]).filter(z=>z.pasos);
+    return `<li><time>${hora(d.t)}</time><span><b>${esc(d.pierna)}</b> · ${d.minutos} min · ${zs.length} zonas con cajas · v mediana ${zs.length?Math.round(zs.map(z=>z.v_est_mms).sort((a,b)=>a-b)[Math.floor(zs.length/2)]):'—'} mm/s<br>${an.length?an.map(a=>`<span class="${/SIN TRACCI|CONSUMO|TENSI/.test(a.tipo)?'rechazada':'pendiente'}">${esc(a.zona)} ${esc(a.tipo)}</span>: ${esc(a.detalle)}`).join('<br>'):'<span class="aplicada">sin anomalías</span>'}</span></li>`;}).join(''):'<li><time>—</time><span>sin diagnósticos todavía</span></li>';
+}
+document.querySelectorAll('button[data-dm]').forEach(b=>b.onclick=()=>{dgMin=Math.max(1,Math.min(10,dgMin+ +b.dataset.dm));document.getElementById('dgMin').textContent=dgMin;});
+document.querySelectorAll('button[data-dg]').forEach(b=>b.onclick=async()=>{const k=clave(); if(!k) return; if(!window.confirm(`Diagnóstico de ${b.textContent} durante ${dgMin} min: haz pasar cajas sueltas y derechas mientras mide. ¿Empezar?`)) return; b.disabled=true;
+  try{await rpc('mant_ordenar',{p_clave:k,p_ip:b.dataset.dg,p_accion:'diagnostico',p_valor:dgMin,p_origen:'celular'}); setTimeout(carga,2000);}catch(err){document.getElementById('meta').textContent=err.message;} setTimeout(()=>b.disabled=false,5000);});
 carga(); setInterval(carga,5000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)carga();});
 </script>
