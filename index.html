@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mantenimiento ECO</title>
+<meta name="description" content="Modo mantenimiento Provagro: velocidad por tarjeta ECO desde el celular, vía el PC puente en planta; estado real leído y órdenes registradas.">
+<style>
+:root{--bg:#13212b;--bg2:#0f1a22;--card:#182a36;--line:#2c4555;--tx:#e4eef2;--mut:#86a1ae;--ok:#45c486;--cur:#7fd0ff;--fail:#f05a5a;--blk:#f0b43c}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.4 -apple-system,"Segoe UI",system-ui,sans-serif;padding-bottom:40px}
+header{position:sticky;top:0;z-index:2;background:var(--bg2);border-bottom:1px solid var(--line);padding:calc(8px + env(safe-area-inset-top)) 14px 8px}
+.h1{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+h1{margin:0;font-size:16px;font-weight:600}
+.meta{color:var(--mut);font-size:13px}
+.puente{margin-top:6px;font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:#10303f;color:var(--cur)}
+.puente.off{background:#3a1a1a;border-color:#7a2f2f;color:var(--fail)}
+main{padding:10px 12px;max-width:1000px;margin:0 auto}
+details{background:var(--card);border:1px solid var(--line);border-radius:10px;margin:8px 0;overflow:hidden}
+summary{list-style:none;cursor:pointer;padding:12px 14px;font-weight:600;display:flex;justify-content:space-between;gap:8px}
+summary::-webkit-details-marker{display:none}
+summary small{color:var(--mut);font-weight:400}
+.t{display:grid;grid-template-columns:70px 1fr auto;gap:8px 10px;padding:10px 14px;border-top:1px solid #1f3442;align-items:center}
+.t .ip{font-variant-numeric:tabular-nums}
+.t .ip small{display:block;color:var(--mut);font-size:12px}
+.vel{display:flex;align-items:center;gap:6px}
+.vel b{min-width:46px;text-align:center;font-size:17px}
+button{font:15px -apple-system,"Segoe UI",system-ui;padding:10px 12px;border-radius:9px;border:1px solid var(--line);background:#1d3240;color:var(--tx);cursor:pointer;-webkit-tap-highlight-color:transparent}
+button.p{background:#1f5b77;border-color:#1f5b77}
+button.f{background:#3a2d12;border-color:#7a5e22;color:var(--blk)}
+button:disabled{opacity:.4}
+.est{font-size:12px;color:var(--mut);white-space:nowrap}
+.est .on{color:var(--ok)}.est .mv{color:var(--cur)}.est .pend{color:var(--blk)}
+.bit li{display:grid;grid-template-columns:52px 1fr;gap:8px;padding:7px 14px;border-top:1px solid #1f3442;font-size:13px}
+.bit{list-style:none;margin:0;padding:0}
+.bit time{color:var(--mut)}
+.aplicada{color:var(--ok)}.rechazada,.error{color:var(--fail)}.pendiente{color:var(--blk)}
+.aviso{font-size:13px;color:var(--mut);padding:8px 14px}
+</style>
+</head>
+<body>
+<header>
+  <div class="h1"><h1>Mantenimiento ECO · velocidad</h1><div class="meta" id="meta">cargando…</div></div>
+  <div class="puente off" id="puente">puente del PC: sin señal</div>
+</header>
+<main>
+  <div class="aviso">Cada «Aplicar» escribe la velocidad en la tarjeta (en RAM, efecto inmediato). «Guardar» la graba en la memoria de la tarjeta para que sobreviva al corte. Límite 30–80 %. Lo que ves es lo que el PC leyó de la tarjeta, no lo que pediste.</div>
+  <div id="cuerpo"></div>
+  <details id="dOrd"><summary><span>Órdenes</span><small id="nOrd"></small></summary><ul class="bit" id="ord"></ul></details>
+</main>
+<script>
+const URL_='https://rfnedcsjbmktoducwenr.supabase.co/rest/v1/',KEY='sb_publishable_SQ2annv6mRBuhKtqEkgYyw_mSZ4YJdP';
+const H={apikey:KEY,Authorization:'Bearer '+KEY,'Content-Type':'application/json'};
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const hora=t=>new Date(t).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+let E=[],pedido={};
+function clave(){let k='';try{k=localStorage.getItem('plan_clave')||''}catch(e){} if(!k){k=window.prompt('Clave del tablero:')||'';if(k)try{localStorage.setItem('plan_clave',k)}catch(e){}} return k;}
+async function rpc(fn,c){const r=await fetch(URL_+'rpc/'+fn,{method:'POST',headers:H,body:JSON.stringify(c)});if(!r.ok){const t=await r.text();if(t.includes('clave'))try{localStorage.removeItem('plan_clave')}catch(e){};throw new Error(t.slice(0,160));}return r.json();}
+async function carga(){
+  try{
+    const o={headers:H,cache:'no-store'};
+    const [e,p,ord]=await Promise.all([fetch(URL_+'provagro_mant_estado?select=*&order=ip',o).then(r=>r.json()),fetch(URL_+'provagro_mant_puente?select=*',o).then(r=>r.json()),fetch(URL_+'provagro_mant_ordenes?select=*&order=t.desc&limit=30',o).then(r=>r.json())]);
+    E=e; pinta(e,p[0],ord);
+  }catch(err){document.getElementById('meta').textContent='sin conexión';}
+}
+function pinta(e,p,ord){
+  const m=p?(Date.now()-new Date(p.actualizado))/1000:9e9; const pu=document.getElementById('puente');
+  pu.textContent=p?`puente del PC: ${m<20?'activo':'SIN SEÑAL'} · última lectura hace ${Math.round(m)} s`:'puente del PC: sin señal'; pu.className='puente'+(m<20?'':' off');
+  document.getElementById('meta').textContent=`${e.length} tarjetas · ${ord.filter(x=>x.estado==='pendiente').length} órdenes pendientes`;
+  const grupos={};e.forEach(x=>(grupos[x.pierna]=grupos[x.pierna]||[]).push(x));
+  let h='';
+  for(const g of ['1001','2001','sellado']){const ts=grupos[g]||[]; if(!ts.length) continue;
+    h+=`<details open><summary><span>Pierna ${g}</span><small>${ts.length} tarjetas</small></summary>`;
+    for(const t of ts){const ip=t.ip, v=t.vel_izq, pend=pedido[ip]??v, mismo=t.vel_izq===t.vel_der;
+      h+=`<div class="t" data-ip="${esc(ip)}"><div class="ip">.${esc(t.nombre)}<small>${v==null?'sin respuesta':(mismo?'':`L ${v/10} / R ${t.vel_der/10} %`)}</small></div>
+        <div class="vel"><button data-d="-50" ${v==null?'disabled':''}>−5</button><b>${pend==null?'—':(pend/10).toFixed(0)+' %'}</b><button data-d="50" ${v==null?'disabled':''}>+5</button>
+          <button class="p" data-ap="1" ${v==null||pend===v?'disabled':''}>Aplicar</button><button class="f" data-fl="1" ${t.flash_pendiente?'':'disabled'}>Guardar</button></div>
+        <div class="est">${v==null?'':`<span class="${t.reg35&16?'on':''}">${t.reg35&16?'caja':'libre'}</span> · <span class="mv">${t.mv?(t.mv/1000).toFixed(1)+' V':''}</span>${t.reg184&1?' · <span class="pend">retenida</span>':''}${t.flash_pendiente?' · <span class="pend">sin guardar</span>':''}`}</div></div>`;}
+    h+='</details>';}
+  document.getElementById('cuerpo').innerHTML=h;
+  document.querySelectorAll('.t').forEach(el=>{const ip=el.dataset.ip, t=E.find(x=>x.ip===ip);
+    el.querySelectorAll('button[data-d]').forEach(b=>b.onclick=()=>{const base=pedido[ip]??t.vel_izq; pedido[ip]=Math.max(300,Math.min(800,base+ +b.dataset.d)); pinta(E,p,ord);});
+    const ap=el.querySelector('button[data-ap]'); if(ap) ap.onclick=async()=>{const k=clave(); if(!k) return; ap.disabled=true; ap.textContent='…';
+      try{await rpc('mant_ordenar',{p_clave:k,p_ip:ip,p_accion:'velocidad',p_valor:pedido[ip],p_origen:'celular'}); delete pedido[ip]; setTimeout(carga,2500);}catch(err){ap.textContent='error'; document.getElementById('meta').textContent=err.message;}};
+    const fl=el.querySelector('button[data-fl]'); if(fl) fl.onclick=async()=>{const k=clave(); if(!k) return; if(!window.confirm(`Guardar en la memoria de la tarjeta .${t.nombre} la velocidad actual (${t.vel_izq/10} %)? Sobrevive al corte de energía.`)) return; fl.disabled=true;
+      try{await rpc('mant_ordenar',{p_clave:k,p_ip:ip,p_accion:'flash',p_origen:'celular'}); setTimeout(carga,4000);}catch(err){document.getElementById('meta').textContent=err.message;}};
+  });
+  document.getElementById('nOrd').textContent=ord.length?hora(ord[0].t):'—';
+  document.getElementById('ord').innerHTML=ord.map(o=>`<li><time>${hora(o.t)}</time><span>.${esc(o.ip.split('.').pop())} ${esc(o.accion)} ${o.valor!=null?(o.valor/10)+' %':''} → <span class="${o.estado}">${esc(o.estado)}</span>${o.resultado?' <small>'+esc(JSON.stringify(o.resultado)).slice(0,120)+'</small>':''}</span></li>`).join('');
+}
+carga(); setInterval(carga,5000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)carga();});
+</script>
+</body>
+</html>
